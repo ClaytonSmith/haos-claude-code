@@ -1,0 +1,22 @@
+---
+configuration:
+  extra_packages:
+    name: Extra apt packages
+    description: >-
+      Installed with apt-get on every start. Fine for a package or two; anything
+      permanent belongs in the image's Dockerfile instead.
+  git_user_name:
+    name: Git user name
+    description: Written to the container's global git config.
+  git_user_email:
+    name: Git user email
+    description: Written to the container's global git config.
+  anthropic_api_key:
+    name: Anthropic API key
+    description: >-
+      Optional. Only set this if you want API-key billing. Leave it empty to
+      sign in with your Claude subscription by running `claude` in the terminal.
+network:
+  7681/tcp: >-
+    Direct web-terminal access. This bypasses Home Assistant authentication —
+    leave it empty and use the sidebar panel unless you specifically need it.

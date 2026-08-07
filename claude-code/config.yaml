@@ -1,0 +1,48 @@
+---
+name: Claude Code
+version: "0.1.0"
+slug: claude_code
+description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
+url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
+image: ghcr.io/claytonsmith/haos-claude-code-{arch}
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: manual
+ingress: true
+ingress_port: 7681
+ingress_stream: true
+panel_icon: mdi:robot-outline
+panel_title: Claude Code
+# The generated AppArmor profile is tuned for single-purpose add-ons and denies
+# things a general dev container legitimately needs (compilers, package managers).
+apparmor: false
+ports:
+  7681/tcp: null
+ports_description:
+  7681/tcp: Direct web-terminal access that BYPASSES Home Assistant auth. Leave empty unless you need it.
+map:
+  - type: homeassistant_config
+    read_only: false
+    path: /homeassistant
+  - type: addon_config
+    read_only: false
+    path: /addon_config
+  - type: share
+    read_only: false
+    path: /share
+  - type: ssl
+    read_only: true
+    path: /ssl
+options:
+  extra_packages: []
+  git_user_name: ""
+  git_user_email: ""
+  anthropic_api_key: ""
+schema:
+  extra_packages:
+    - str
+  git_user_name: str?
+  git_user_email: str?
+  anthropic_api_key: password?
