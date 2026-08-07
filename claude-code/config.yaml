@@ -15,6 +15,9 @@ ingress_port: 7681
 ingress_stream: true
 panel_icon: mdi:robot-outline
 panel_title: Claude Code
+# Makes Supervisor inject a scoped, self-rotating SUPERVISOR_TOKEN, so talking to
+# the HA API needs no long-lived access token stored anywhere.
+homeassistant_api: true
 # The generated AppArmor profile is tuned for single-purpose add-ons and denies
 # things a general dev container legitimately needs (compilers, package managers).
 apparmor: false
