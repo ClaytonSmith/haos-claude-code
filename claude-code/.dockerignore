@@ -1,0 +1,4 @@
+# The Dockerfile only COPYs run.sh, but keeping secrets out of the build context
+# entirely means an accidental `COPY . .` can never publish them.
+*
+!run.sh

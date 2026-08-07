@@ -1,2 +1,12 @@
 .DS_Store
 *.swp
+
+# Runtime secrets belong on the Home Assistant box, never in this repo — the
+# repo is public and every commit here is built into a public image.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.json
+.credentials.json
