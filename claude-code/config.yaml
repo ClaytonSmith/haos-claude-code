@@ -1,6 +1,6 @@
 ---
 name: Claude Code
-version: "0.1.1"
+version: "0.2.0"
 slug: claude_code
 description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
 url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
@@ -29,9 +29,11 @@ map:
   - type: homeassistant_config
     read_only: false
     path: /homeassistant
-  - type: addon_config
+  # Renamed from addon_config in Supervisor 2026.07. The legacy name still works
+  # but logs a deprecation warning; the host dir is /app_configs/<slug>.
+  - type: app_config
     read_only: false
-    path: /addon_config
+    path: /app_config
   - type: share
     read_only: false
     path: /share

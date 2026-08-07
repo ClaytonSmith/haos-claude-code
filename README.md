@@ -11,16 +11,32 @@ points Supervisor at the published image, so your HA box pulls instead of builds
 
 ## Install
 
-1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, and add:
+### Over SSH (simplest — no token needed)
 
-   ```
-   https://github.com/ClaytonSmith/haos-claude-code
-   ```
+```bash
+ha store repositories add https://github.com/ClaytonSmith/haos-claude-code
+ha store reload
+ha store apps | grep -i claude          # note the slug, e.g. a1b2c3d4_claude_code
+ha apps install <slug>
+ha apps start <slug>
+```
 
-2. Refresh the store, open **Claude Code**, and click **Install**. Supervisor
-   pulls `ghcr.io/claytonsmith/haos-claude-code-{arch}` matching your hardware.
-3. **Start** the add-on, then open **Claude Code** in the sidebar.
-4. Run `claude` in the terminal and follow the sign-in prompt.
+`ha apps` is the current command; `ha addons` still works as an alias.
+
+### Or in the UI
+
+**Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add
+`https://github.com/ClaytonSmith/haos-claude-code`, refresh, then install and
+start **Claude Code**.
+
+### Or remotely
+
+`scripts/deploy.sh` drives the whole thing over the REST API from another
+machine — see the header comment. `--diagnose` prints what Supervisor actually
+sees, which is the fastest way to debug a store that looks empty.
+
+Either way, finish by opening **Claude Code** in the sidebar and running
+`claude` to sign in.
 
 ## What's in the image
 
@@ -37,7 +53,7 @@ tab doesn't kill a running agent.
 | `/data/workspace` | Persistent scratch space. Put git checkouts here.              |
 | `/homeassistant`  | Your Home Assistant config, **read-write**.                    |
 | `/share`          | Shared with other add-ons, read-write.                         |
-| `/addon_config`   | This add-on's own config dir; drop a `post-start.sh` here.     |
+| `/app_config`   | This add-on's own config dir; drop a `post-start.sh` here.     |
 | `/ssl`            | Certificates, read-only.                                       |
 
 Everything outside `/data`, `/share`, and the mapped config dirs lives in the
@@ -51,7 +67,7 @@ runner — so no secret is ever baked in. At runtime:
 - **Home Assistant API**: nothing to configure. `homeassistant_api: true` makes
   Supervisor inject a scoped, self-rotating token, re-exported as `HA_URL` and
   `HA_TOKEN`. Prefer this over minting a long-lived access token.
-- **Everything else**: a `.env` at `/addon_configs/*_claude_code/.env` is sourced
+- **Everything else**: a `.env` at `/app_configs/<slug>/.env` is sourced
   on every start. Off the image, off git, survives updates.
 - **`anthropic_api_key`**: an add-on option, stored in `/data/options.json` and
   exported as `ANTHROPIC_API_KEY`.
@@ -65,7 +81,7 @@ Three options, in increasing order of permanence:
 - **`extra_packages`** in the add-on options — apt packages installed on each
   start. Convenient, but re-runs every boot.
 - **`post-start.sh`** — drop an executable script at
-  `/addon_configs/*_claude_code/post-start.sh` (reachable via the Samba or File
+  `/app_configs/<slug>/post-start.sh` (reachable via the Samba or File
   Editor add-on). Runs before the terminal starts.
 - **Edit the Dockerfile here** and bump `version` in `claude-code/config.yaml`.
   Pushing to `main` builds and publishes both architectures; Home Assistant then

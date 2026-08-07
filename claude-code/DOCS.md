@@ -68,13 +68,13 @@ curl -sH "Authorization: Bearer ${HA_TOKEN}" "${HA_URL}/api/states" | jq '.[0]'
 Prefer this over a long-lived access token. If you specifically need one (for an
 external service, say), put it in the `.env` below.
 
-### 2. `/addon_config/.env` — for everything else
+### 2. `/app_config/.env` — for everything else
 
 Create a `.env` in the add-on's config dir and it is sourced into the environment
 on every start. Host path, via the Samba or File Editor add-on:
 
 ```
-/addon_configs/<hash>_claude_code/.env
+/app_configs/<slug>/.env
 ```
 
 ```bash
@@ -100,16 +100,16 @@ explicitly set wins.
 | `/data/workspace` | Persistent scratch space for git checkouts.                |
 | `/homeassistant`  | Home Assistant config, **read-write**.                     |
 | `/share`          | Shared with other add-ons.                                 |
-| `/addon_config`   | This add-on's config dir. Put `post-start.sh` here.        |
+| `/app_config`   | This add-on's config dir. Put `post-start.sh` here.        |
 | `/ssl`            | Certificates, read-only.                                   |
 
 Anything written elsewhere is lost when the add-on updates.
 
 ## The `post-start.sh` hook
 
-An executable script at `/addon_config/post-start.sh` runs on every start,
+An executable script at `/app_config/post-start.sh` runs on every start,
 before the terminal comes up. From the Samba or File Editor add-on the host path
-is `/addon_configs/<hash>_claude_code/post-start.sh`. Use it to clone repos,
+is `/app_configs/<slug>/post-start.sh`. Use it to clone repos,
 install a language toolchain, or restore dotfiles without rebuilding the image.
 
 Remember to `chmod +x` it — a non-executable hook is skipped with a log line.

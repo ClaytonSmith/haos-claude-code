@@ -42,12 +42,15 @@ fi
 # GHCR, and GitHub Actions secrets only exist on the build runner. Two runtime
 # paths instead, both outside the image and outside git:
 #
-#   1. /addon_config/.env — KEY=value lines, edited over Samba / File Editor.
-#      Host path: /addon_configs/<hash>_claude_code/.env
+#   1. <app config dir>/.env — KEY=value lines, edited over SSH / Samba.
+#      Host path: /app_configs/<slug>/.env (/addon_configs on Supervisor <2026.07)
 #   2. Add-on options — Supervisor stores them in /data/options.json.
 #
 # Options are read after this block, so an explicitly-set option wins over .env.
-ENV_FILE="/addon_config/.env"
+APP_CONFIG_DIR="/app_config"
+[[ -d "${APP_CONFIG_DIR}" ]] || APP_CONFIG_DIR="/addon_config"
+export APP_CONFIG_DIR
+ENV_FILE="${APP_CONFIG_DIR}/.env"
 if [[ -f "${ENV_FILE}" ]]; then
     log "Sourcing ${ENV_FILE}"
     set -a
@@ -90,9 +93,9 @@ if [[ ${#extra_packages[@]} -gt 0 ]]; then
 fi
 
 # --- user hook ---------------------------------------------------------------
-# /addon_config/post-start.sh (host path: /addon_configs/*_claude_code/post-start.sh)
+# post-start.sh in the app config dir (host: /app_configs/<slug>/post-start.sh)
 # lets you extend the container without rebuilding the image.
-HOOK="/addon_config/post-start.sh"
+HOOK="${APP_CONFIG_DIR}/post-start.sh"
 if [[ -x "${HOOK}" ]]; then
     log "Running ${HOOK}"
     "${HOOK}" || log "WARNING: post-start hook exited non-zero; continuing."
