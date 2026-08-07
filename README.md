@@ -43,6 +43,21 @@ tab doesn't kill a running agent.
 Everything outside `/data`, `/share`, and the mapped config dirs lives in the
 image and is replaced on every add-on update.
 
+## Secrets
+
+The published image is public, and GitHub Actions secrets only exist on the build
+runner — so no secret is ever baked in. At runtime:
+
+- **Home Assistant API**: nothing to configure. `homeassistant_api: true` makes
+  Supervisor inject a scoped, self-rotating token, re-exported as `HA_URL` and
+  `HA_TOKEN`. Prefer this over minting a long-lived access token.
+- **Everything else**: a `.env` at `/addon_configs/*_claude_code/.env` is sourced
+  on every start. Off the image, off git, survives updates.
+- **`anthropic_api_key`**: an add-on option, stored in `/data/options.json` and
+  exported as `ANTHROPIC_API_KEY`.
+
+See [`claude-code/DOCS.md`](claude-code/DOCS.md) for details.
+
 ## Extending it
 
 Three options, in increasing order of permanence:

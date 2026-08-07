@@ -37,6 +37,34 @@ fi
 # `bash -l` reads .bash_profile, not .bashrc — bridge the two.
 [[ -f "${HOME}/.bash_profile" ]] || echo '[[ -f ~/.bashrc ]] && . ~/.bashrc' > "${HOME}/.bash_profile"
 
+# --- secrets -----------------------------------------------------------------
+# Runtime secrets must never be baked into the image: it is published publicly to
+# GHCR, and GitHub Actions secrets only exist on the build runner. Two runtime
+# paths instead, both outside the image and outside git:
+#
+#   1. /addon_config/.env — KEY=value lines, edited over Samba / File Editor.
+#      Host path: /addon_configs/<hash>_claude_code/.env
+#   2. Add-on options — Supervisor stores them in /data/options.json.
+#
+# Options are read after this block, so an explicitly-set option wins over .env.
+ENV_FILE="/addon_config/.env"
+if [[ -f "${ENV_FILE}" ]]; then
+    log "Sourcing ${ENV_FILE}"
+    set -a
+    # shellcheck disable=SC1090
+    source "${ENV_FILE}" || log "WARNING: ${ENV_FILE} returned non-zero."
+    set +a
+fi
+
+# Supervisor injects SUPERVISOR_TOKEN because config.yaml sets
+# homeassistant_api: true. It is scoped to this add-on and rotates on its own, so
+# there is no long-lived token to mint, store, or leak.
+if [[ -n "${SUPERVISOR_TOKEN:-}" ]]; then
+    export HA_URL="${HA_URL:-http://supervisor/core}"
+    export HA_TOKEN="${HA_TOKEN:-${SUPERVISOR_TOKEN}}"
+    log "Home Assistant API available at \${HA_URL} with \${HA_TOKEN}."
+fi
+
 # --- options -----------------------------------------------------------------
 git_name="$(opt '.git_user_name')"
 git_email="$(opt '.git_user_email')"

@@ -43,6 +43,55 @@ correctly.
 Optional. Exported as `ANTHROPIC_API_KEY`. Leave empty to use subscription
 sign-in.
 
+## Secrets and environment variables
+
+The image is published publicly to GHCR, so **nothing secret can live in it**.
+GitHub Actions secrets don't help either — they only exist on the build runner.
+Runtime secrets come from one of three places:
+
+### 1. The Home Assistant API — no token needed
+
+The add-on sets `homeassistant_api: true`, so Supervisor injects a scoped,
+auto-rotating `SUPERVISOR_TOKEN`. The entrypoint re-exports it as:
+
+```bash
+HA_URL=http://supervisor/core
+HA_TOKEN=<supervisor token>
+```
+
+So this works out of the box, with no long-lived token to mint or store:
+
+```bash
+curl -sH "Authorization: Bearer ${HA_TOKEN}" "${HA_URL}/api/states" | jq '.[0]'
+```
+
+Prefer this over a long-lived access token. If you specifically need one (for an
+external service, say), put it in the `.env` below.
+
+### 2. `/addon_config/.env` — for everything else
+
+Create a `.env` in the add-on's config dir and it is sourced into the environment
+on every start. Host path, via the Samba or File Editor add-on:
+
+```
+/addon_configs/<hash>_claude_code/.env
+```
+
+```bash
+OPENAI_API_KEY=...
+TAILSCALE_AUTHKEY=...
+GH_TOKEN=...
+```
+
+It lives on the HA data volume — outside the image, outside git, and it survives
+add-on updates.
+
+### 3. Add-on options
+
+`anthropic_api_key` is stored by Supervisor in `/data/options.json` and exported
+as `ANTHROPIC_API_KEY`. Options are applied *after* `.env`, so an option that is
+explicitly set wins.
+
 ## Paths
 
 | Path              | Notes                                                     |
