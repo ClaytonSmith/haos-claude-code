@@ -43,6 +43,22 @@ correctly.
 Optional. Exported as `ANTHROPIC_API_KEY`. Leave empty to use subscription
 sign-in.
 
+### `workspace_repo`
+
+A git URL cloned into `/data/workspace` on every start, and used as the shell's
+working directory. Defaults to this add-on's own source.
+
+That default is the point, not a convenience: a `CLAUDE.md` in this repo is
+written *for the agent running in this container*, and unless the repo is checked
+out in here, the one reader it addresses never sees it. Cloning it also puts
+`config.yaml`, `run.sh`, and the `Dockerfile` within reach of the session running
+on top of them.
+
+On restart the checkout is updated with `git pull --ff-only`, which **cannot**
+discard work: if there are local commits or the branch has diverged, the pull
+fails and the checkout is left exactly as it was. Set the option to `""` to skip
+cloning and start in `$HOME`.
+
 ## Secrets and environment variables
 
 The image is published publicly to GHCR, so **nothing secret can live in it**.
@@ -118,7 +134,8 @@ explicitly set wins.
 | Path              | Notes                                                     |
 | ----------------- | --------------------------------------------------------- |
 | `/data/home`      | `HOME`. Persistent.                                        |
-| `/data/workspace` | Persistent scratch space for git checkouts.                |
+| `/data/workspace` | Persistent git checkouts. `workspace_repo` lands here.      |
+| `/local_apps`     | The host's local add-on dir. Build sibling containers here. |
 | `/homeassistant`  | Home Assistant config, **read-write**.                     |
 | `/share`          | Shared with other add-ons.                                 |
 | `/app_config`   | This add-on's config dir. Put `post-start.sh` here.        |

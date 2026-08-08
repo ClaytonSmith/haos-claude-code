@@ -31,7 +31,6 @@ export EDITOR=nano
 alias ll='ls -alF'
 alias ha='cd /homeassistant'
 # /data/workspace persists; git checkouts belong here, not in / or /tmp.
-cd "${HOME}" 2>/dev/null || true
 EOF
 fi
 # `bash -l` reads .bash_profile, not .bashrc — bridge the two.
@@ -92,6 +91,39 @@ if [[ ${#extra_packages[@]} -gt 0 ]]; then
         || log "WARNING: extra package install failed; continuing."
 fi
 
+# --- workspace repo ----------------------------------------------------------
+# Check the add-on's own source out *inside* the container. Without this, the
+# CLAUDE.md that addresses the agent living here exists only on the machine that
+# built the image — the one reader it is written for never sees it. Cloning it
+# also means the manifest, run.sh, and Dockerfile are readable and editable from
+# the session that runs on top of them.
+WORKDIR="${HOME}"
+repo_url="$(opt '.workspace_repo')"
+if [[ -n "${repo_url}" ]]; then
+    repo_dir="/data/workspace/$(basename "${repo_url}" .git)"
+    if [[ -d "${repo_dir}/.git" ]]; then
+        # --ff-only so a restart can never discard work in progress: if the agent
+        # has local commits, or the branch diverged, this fails and leaves it be.
+        git -C "${repo_dir}" fetch --quiet --all 2>/dev/null || log "  fetch failed; using the checkout as-is."
+        if git -C "${repo_dir}" pull --ff-only --quiet 2>/dev/null; then
+            log "Updated ${repo_dir}"
+        else
+            log "${repo_dir} is not fast-forwardable (local work?) — left untouched."
+        fi
+    elif git clone --quiet "${repo_url}" "${repo_dir}" 2>/dev/null; then
+        log "Cloned ${repo_url} -> ${repo_dir}"
+    else
+        log "WARNING: could not clone ${repo_url}; continuing without it."
+    fi
+    [[ -d "${repo_dir}" ]] && WORKDIR="${repo_dir}"
+fi
+
+# The shell starts here. Written every boot and sourced last, so it wins over the
+# .bashrc above — which is only generated once and would otherwise pin an old path.
+printf 'cd %q 2>/dev/null || true\n' "${WORKDIR}" > "${HOME}/.workspace_cd"
+grep -q 'workspace_cd' "${HOME}/.bashrc" 2>/dev/null \
+    || echo '[[ -f ~/.workspace_cd ]] && . ~/.workspace_cd' >> "${HOME}/.bashrc"
+
 # --- user hook ---------------------------------------------------------------
 # post-start.sh in the app config dir (host: /app_configs/<slug>/post-start.sh)
 # lets you extend the container without rebuilding the image.
@@ -121,8 +153,8 @@ EOF
         || echo '[[ -f ~/.motd ]] && cat ~/.motd' >> "${HOME}/.bashrc"
 fi
 
-log "Starting web terminal on port 7681"
-cd "${HOME}"
+log "Starting web terminal on port 7681 in ${WORKDIR}"
+cd "${WORKDIR}"
 
 # tmux keeps the session alive across browser reloads, so a long Claude Code run
 # is not killed by closing the tab.

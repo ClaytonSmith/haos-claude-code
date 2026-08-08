@@ -1,6 +1,6 @@
 ---
 name: Claude Code
-version: "0.3.1"
+version: "0.4.0"
 slug: claude_code
 description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
 url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
@@ -62,9 +62,14 @@ options:
   git_user_name: ""
   git_user_email: ""
   anthropic_api_key: ""
+  # Cloned into /data/workspace on every start and used as the shell's working
+  # directory. Defaults to this add-on's own source so the agent can read the
+  # CLAUDE.md written for it. Set to "" to disable and start in $HOME instead.
+  workspace_repo: "https://github.com/ClaytonSmith/haos-claude-code"
 schema:
   extra_packages:
     - str
   git_user_name: str?
   git_user_email: str?
   anthropic_api_key: password?
+  workspace_repo: str?

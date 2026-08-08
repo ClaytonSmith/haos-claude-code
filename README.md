@@ -62,7 +62,8 @@ tab doesn't kill a running agent.
 | Path              | What it is                                                    |
 | ----------------- | ------------------------------------------------------------- |
 | `/data/home`      | `HOME`. Persistent — auth tokens, shell history, config.       |
-| `/data/workspace` | Persistent scratch space. Put git checkouts here.              |
+| `/data/workspace` | Persistent checkouts. `workspace_repo` is cloned here on boot. |
+| `/local_apps`     | The host's local add-on dir — build sibling containers here.   |
 | `/homeassistant`  | Your Home Assistant config, **read-write**.                    |
 | `/share`          | Shared with other add-ons, read-write.                         |
 | `/app_config`   | This add-on's own config dir; drop a `post-start.sh` here.     |
