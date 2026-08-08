@@ -116,6 +116,22 @@ if [[ -n "${repo_url}" ]]; then
         log "WARNING: could not clone ${repo_url}; continuing without it."
     fi
     [[ -d "${repo_dir}" ]] && WORKDIR="${repo_dir}"
+
+    # Starting the shell in the repo makes CLAUDE.md load as project context, but
+    # only while the cwd stays there — `cd /homeassistant` and it silently drops
+    # out. The stance it describes ("you are running inside this container; an
+    # update ends your session") is true of the whole container, not one
+    # directory, so link it in as user-level memory too. Belt and braces.
+    if [[ -f "${repo_dir}/CLAUDE.md" ]]; then
+        mkdir -p "${CLAUDE_CONFIG_DIR}"
+        if [[ ! -e "${CLAUDE_CONFIG_DIR}/CLAUDE.md" || -L "${CLAUDE_CONFIG_DIR}/CLAUDE.md" ]]; then
+            # Symlink, not a copy, so `git pull` keeps it current.
+            ln -sfn "${repo_dir}/CLAUDE.md" "${CLAUDE_CONFIG_DIR}/CLAUDE.md"
+            log "Linked CLAUDE.md into ${CLAUDE_CONFIG_DIR} (loads regardless of cwd)"
+        else
+            log "${CLAUDE_CONFIG_DIR}/CLAUDE.md is a real file — left alone."
+        fi
+    fi
 fi
 
 # The shell starts here. Written every boot and sourced last, so it wins over the
