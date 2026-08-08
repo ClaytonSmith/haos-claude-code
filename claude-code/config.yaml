@@ -1,6 +1,6 @@
 ---
 name: Claude Code
-version: "0.3.0"
+version: "0.3.1"
 slug: claude_code
 description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
 url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
@@ -54,6 +54,9 @@ map:
   - type: ssl
     read_only: true
     path: /ssl
+  - type: local_apps
+    read_only: false
+    path: /local_apps
 options:
   extra_packages: []
   git_user_name: ""
