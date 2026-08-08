@@ -131,7 +131,11 @@ explicitly set wins.
 
 ### `autostart_command`
 
-Run inside the tmux session on every start, from the `workspace_repo` checkout.
+Run inside the tmux session when the **add-on starts**, from the `workspace_repo`
+checkout — not when you open the panel. The session is created detached at boot
+and the sidebar terminal only ever attaches to it, so Remote Control comes up
+unattended and the add-on is useful without opening the terminal at all.
+
 Defaults to:
 
 ```

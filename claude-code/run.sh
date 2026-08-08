@@ -195,11 +195,24 @@ chmod +x "${HOME}/.start-session"
 log "Starting web terminal on port 7681 in ${WORKDIR}"
 cd "${WORKDIR}"
 
+# ttyd spawns its command once per *browser connection* — that is what --max-clients
+# and --exit-no-conn are counting. So handing the session to ttyd means nothing runs
+# until someone opens the panel, and an autostarted Remote Control session would
+# never appear in claude.ai/code unattended. Start it detached at boot instead; ttyd
+# then only ever attaches to a session that is already up.
+if tmux has-session -t claude 2>/dev/null; then
+    log "tmux session 'claude' already running — attaching."
+else
+    tmux new-session -d -s claude "${HOME}/.start-session"
+    log "Started detached tmux session 'claude' running: $(cat "${HOME}/.autostart_command")"
+fi
+
 # tmux keeps the session alive across browser reloads, so a long Claude Code run
-# is not killed by closing the tab.
+# is not killed by closing the tab. No command here on purpose — the session was
+# already started above, and this must only ever attach to it.
 exec ttyd \
     --port 7681 \
     --writable \
     --client-option fontSize=14 \
     --client-option 'theme={"background":"#1e1e2e"}' \
-    tmux new -A -s claude "${HOME}/.start-session"
+    tmux new -A -s claude
