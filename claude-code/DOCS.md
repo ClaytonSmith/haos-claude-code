@@ -68,6 +68,27 @@ curl -sH "Authorization: Bearer ${HA_TOKEN}" "${HA_URL}/api/states" | jq '.[0]'
 Prefer this over a long-lived access token. If you specifically need one (for an
 external service, say), put it in the `.env` below.
 
+The same token also reaches **Supervisor** itself, because the add-on sets
+`hassio_api: true` and `hassio_role: manager`:
+
+```bash
+curl -sH "Authorization: Bearer ${SUPERVISOR_TOKEN}" http://supervisor/store | jq '.data.addons | length'
+```
+
+That is what makes the container able to install and manage add-ons — including
+building new ones and updating itself. `manager` is the lowest role whose
+allowlist covers `/store.*` and `/addons/<slug>/...`; it also covers `/host/...`
+and `/os/...`, so it can reboot the machine. Treat it with the seriousness that
+implies.
+
+Note this is Supervisor's own listener on the add-on network, **not** the
+`/api/hassio/...` proxy on the Core port — that one is 401-blocked in HA 2026.7
+no matter what token you present.
+
+> Updating this add-on replaces the container you are running in, ending the
+> session with no warning. For anything substantial, build a separate add-on
+> instead of modifying this image.
+
 ### 2. `/app_config/.env` — for everything else
 
 Create a `.env` in the add-on's config dir and it is sourced into the environment

@@ -31,9 +31,21 @@ start **Claude Code**.
 
 ### Or remotely
 
-`scripts/deploy.sh` drives the whole thing over the REST API from another
-machine — see the header comment. `--diagnose` prints what Supervisor actually
-sees, which is the fastest way to debug a store that looks empty.
+Drive Supervisor over its **WebSocket** `supervisor/api` route:
+`POST /store/repositories` → `POST /store/reload` → `POST /store/addons/<slug>/install`
+→ `POST /addons/<slug>/start`.
+
+Do **not** reach for the `/api/hassio/...` REST proxy. It returns 401 on every
+path in HA 2026.7 regardless of token, and a 401 there has an *empty body*, so a
+`curl … | jq -e '.result == "ok"'` health check passes while every write
+silently does nothing. That failure mode cost a full session before it was found.
+
+Two more things that are easy to get wrong: `/store/apps` does not exist —
+the 2026.07 addons → apps rename hit the `ha` CLI and the `map:` type, not the
+REST paths, so it is still `/store/addons`. And `supervisor/api` raises
+`unknown_error` with an empty message for any endpoint returning a non-JSON body
+(`install`, `start`, `logs`) *even on success*; always read the state back with
+`/addons/<slug>/info` rather than trusting the exception.
 
 Either way, finish by opening **Claude Code** in the sidebar and running
 `claude` to sign in.
@@ -93,6 +105,20 @@ The workflow tags images with the `version` field from `claude-code/config.yaml`
 and Supervisor pulls `image:version` — so **bumping that version is what makes an
 update visible in Home Assistant**. Push to `main` with a changed version and the
 add-on shows an update once the build finishes.
+
+> **If you are Claude, running inside this container, read this twice.**
+> Applying that update replaces the container you are executing in. Sessions do
+> not survive it — the work stops mid-thought, with no chance to save state or
+> report back. Editing this repo is editing your own floor.
+>
+> `/data/home` and `/data/workspace` persist, so credentials and checkouts come
+> back; the *session* does not. Two consequences worth internalising:
+>
+> - Batch changes to this image. Land one version bump, not five.
+> - For anything non-trivial, build it as its **own** add-on under `/local_apps`
+>   rather than baking it in here. A sibling container can be rebuilt and
+>   restarted as often as you like without ending the session doing the work.
+>   `hassio_role: manager` exists precisely so you can do that unassisted.
 
 ## Security notes
 

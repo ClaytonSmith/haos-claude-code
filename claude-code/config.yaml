@@ -1,6 +1,6 @@
 ---
 name: Claude Code
-version: "0.2.0"
+version: "0.3.0"
 slug: claude_code
 description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
 url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
@@ -18,6 +18,20 @@ panel_title: Claude Code
 # Makes Supervisor inject a scoped, self-rotating SUPERVISOR_TOKEN, so talking to
 # the HA API needs no long-lived access token stored anywhere.
 homeassistant_api: true
+# Supervisor API access, so the container can build and install add-ons in
+# /local_apps and manage itself. `manager` is the LOWEST role whose allowlist
+# includes /store.* and /addons/<slug>/... — verified against Supervisor
+# 2026.07.5's role table in api/middleware/security.py.
+#
+# Know what this costs: the same role also covers /host/.+, /os/..., /network/.+,
+# /mounts.* and /backups.*, so it includes rebooting or shutting down the host.
+# There is no finer-grained role between `backup` and `manager`.
+#
+# Deliberately NOT docker_api or full_access: both are gated on protection mode
+# being switched off (docker/app.py), and this reaches the same goal with
+# protection left ON.
+hassio_api: true
+hassio_role: manager
 # The generated AppArmor profile is tuned for single-purpose add-ons and denies
 # things a general dev container legitimately needs (compilers, package managers).
 apparmor: false
