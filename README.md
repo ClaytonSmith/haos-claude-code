@@ -48,7 +48,12 @@ REST paths, so it is still `/store/addons`. And `supervisor/api` raises
 `/addons/<slug>/info` rather than trusting the exception.
 
 Either way, finish by opening **Claude Code** in the sidebar and running
-`claude` to sign in.
+`claude` once to sign in — that step is interactive and cannot be scripted.
+
+After that it starts `claude remote-control --name haos` on every boot, in the
+`workspace_repo` checkout, so you can drive it from **claude.ai/code** or the
+mobile app without opening the sidebar at all. The `autostart_command` option
+changes or disables it; if it exits you get a shell rather than a dead panel.
 
 ## What's in the image
 

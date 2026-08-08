@@ -129,6 +129,39 @@ add-on updates.
 as `ANTHROPIC_API_KEY`. Options are applied *after* `.env`, so an option that is
 explicitly set wins.
 
+### `autostart_command`
+
+Run inside the tmux session on every start, from the `workspace_repo` checkout.
+Defaults to:
+
+```
+claude remote-control --name haos
+```
+
+That hosts a Remote Control session you can drive from **claude.ai/code** or the
+Claude mobile app, so the add-on is useful without opening the sidebar terminal
+at all.
+
+`--name` is pinned rather than left to default. The default name is derived from
+the hostname, which here is the slug-based `1dedd3a9-claude-code` and changes if
+the add-on is ever reinstalled under a different repository slug — you would get a
+new entry in claude.ai/code instead of the same one reconnecting.
+
+If the command exits or fails, you drop to an interactive shell rather than a dead
+panel, and the reason is printed. Set the option to `""` to boot straight to a
+shell.
+
+Note the session inherits Claude Code's **default** permission mode. This
+container holds `hassio_role: manager`, so think hard before adding
+`--permission-mode bypassPermissions` here — that combination is an unattended
+agent with host reboot rights.
+
+## First run
+
+Sign-in is interactive and cannot be scripted, so run `claude` once from the
+sidebar terminal before relying on autostart. Credentials persist in
+`/data/home/.claude`, so this is a one-time step that survives updates.
+
 ## Paths
 
 | Path              | Notes                                                     |
