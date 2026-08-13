@@ -84,6 +84,10 @@ ENV LANG=en_US.UTF-8 \
     CLAUDE_CONFIG_DIR=/data/home/.claude
 
 COPY run.sh /usr/local/bin/run.sh
+# Baked into the image rather than run from the workspace checkout: the clone
+# happens at runtime and can fail, and a service the house depends on must not
+# be contingent on that.
+COPY dispatch/dispatchd.py /opt/dispatch/dispatchd.py
 RUN chmod +x /usr/local/bin/run.sh
 
 LABEL org.opencontainers.image.source="https://github.com/ClaytonSmith/haos-claude-code"

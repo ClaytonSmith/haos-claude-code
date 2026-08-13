@@ -169,6 +169,21 @@ EOF
         || echo '[[ -f ~/.motd ]] && cat ~/.motd' >> "${HOME}/.bashrc"
 fi
 
+# --- house-dispatch ----------------------------------------------------------
+# Lets the rest of the house hand work to a Claude session over HTTP: HA
+# automations, cron, and sibling add-ons all reach it, so a service does not need
+# an Anthropic API key of its own to get an LLM answer.
+#
+# It binds inside the container only. config.yaml maps no port for it on purpose,
+# so it is reachable at http://1dedd3a9-claude-code:8097 on the add-on network and
+# NOT from the LAN — it runs `claude` as root, and an open port would be remote
+# code execution on a flat network. Callers send a profile NAME, never a prompt.
+if [[ "$(opt '.dispatch_enabled' 'true')" == "true" && -f /opt/dispatch/dispatchd.py ]]; then
+    # setsid so it survives independently of the terminal ttyd owns.
+    setsid python3 /opt/dispatch/dispatchd.py >> /data/dispatch.log 2>&1 &
+    log "Started house-dispatch on :8097 (log: /data/dispatch.log)"
+fi
+
 # --- session autostart -------------------------------------------------------
 # tmux runs this instead of a bare login shell, so the add-on comes up already
 # hosting a Remote Control session reachable from claude.ai/code and the mobile

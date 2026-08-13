@@ -1,6 +1,6 @@
 ---
 name: Claude Code
-version: "0.5.1"
+version: "0.6.0"
 slug: claude_code
 description: An Ubuntu dev container running Claude Code, with a terminal in the Home Assistant sidebar
 url: "https://github.com/ClaytonSmith/haos-claude-code/tree/main/claude-code"
@@ -73,6 +73,9 @@ options:
   # keeps the same entry in claude.ai/code across restarts and reinstalls.
   # Set to "" to boot into a plain shell instead.
   autostart_command: "claude remote-control --name haos"
+  # house-dispatch: an HTTP endpoint on the internal add-on network that runs
+  # `claude -p` for other services. See claude-code/dispatch/README.md.
+  dispatch_enabled: true
 schema:
   extra_packages:
     - str
@@ -81,3 +84,4 @@ schema:
   anthropic_api_key: password?
   workspace_repo: str?
   autostart_command: str?
+  dispatch_enabled: bool
