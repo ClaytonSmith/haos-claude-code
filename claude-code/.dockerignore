@@ -1,4 +1,5 @@
-# The Dockerfile only COPYs run.sh, but keeping secrets out of the build context
-# entirely means an accidental `COPY . .` can never publish them.
+# Deny-by-default: only the files the Dockerfile COPYs are let in, so an
+# accidental `COPY . .` can never publish secrets from the build context.
 *
 !run.sh
+!dispatch/dispatchd.py
