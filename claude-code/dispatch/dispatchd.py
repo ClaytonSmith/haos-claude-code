@@ -88,6 +88,54 @@ prose, no markdown fence:
  "confidence":"high"|"medium"|"low","assumptions":str}
 """
 
+LOGENTRY_PROMPT = """\
+You read one free-text health log entry and return what is in it. The entry may
+describe food, exercise, both, or neither — the writer is not told to say which,
+so work it out.
+
+Return BOTH sections in a single reply. Use null for a section that is absent.
+"had a burrito bowl then ran 3 miles" has both; "two eggs on toast" has only
+food; "45 min peloton" has only exercise.
+
+FOOD — itemise it. Never return only a total; a single-number guess cannot be
+audited or corrected, and per-item estimates are measurably more accurate.
+Assume typical real-world portions; restaurant servings run larger than home
+ones, and say so in `assumptions` when it matters. If the entry names a chain
+restaurant dish, use that chain's actual menu nutrition where you know it.
+Infer `meal` (breakfast/lunch/dinner/snack) from the food and any time of day
+mentioned; use null if genuinely unclear.
+
+EXERCISE — do NOT estimate calories. Return a MET value from the Compendium of
+Physical Activities; the caller computes energy from MET, body weight and
+duration, which is reproducible and self-corrects as weight changes.
+One entry per distinct activity. duration_min is minutes of actual activity — if
+the text gives distance and pace but no time, derive it; if nothing implies a
+duration, use 0 and say so. Pick the MET for the stated intensity, not the
+generic one: running 6 mph is 9.8, running 8 mph is 11.8. For strength training
+use 3.5 (light/moderate) to 6.0 (vigorous, short rest).
+
+confidence: "high" for packaged/measured input, "medium" for an ordinary
+description, "low" when the portion or duration is genuinely unknowable.
+
+If the entry describes neither food nor exercise, set both sections to null and
+explain in `note`. Do NOT ask for clarification and do NOT reply in prose —
+anything that is not the object below is a parse failure that gets retried,
+which wastes far more than a wrong guess would.
+
+Reply with ONLY a JSON object. No prose, no markdown fence:
+{"food": {"items":[{"name":str,"portion":str,"kcal":int,"protein_g":int,
+                    "carb_g":int,"fat_g":int}],
+          "kcal":int,"protein_g":int,"carb_g":int,"fat_g":int,
+          "meal":"breakfast"|"lunch"|"dinner"|"snack"|null,
+          "confidence":"high"|"medium"|"low","assumptions":str} | null,
+ "exercise": {"activities":[{"activity":str,"met":float,"duration_min":int,
+                             "intensity":"light"|"moderate"|"vigorous",
+                             "distance_mi":float|null}],
+              "confidence":"high"|"medium"|"low","assumptions":str} | null,
+ "note": str}
+"""
+
+
 def _merge_activities(objs):
     """Fold bare per-activity objects back into the documented shape.
 
@@ -126,6 +174,17 @@ PROFILES = {
         "json": True,
         "timeout": 120,
         "merge": _merge_activities,
+    },
+    # The one the log page uses. Classifying and then estimating would be two
+    # cold dispatches — ~30-60s and twice the quota — to answer what one call
+    # answers, and it could not express "food AND exercise in one sentence".
+    "logentry": {
+        "system": LOGENTRY_PROMPT,
+        "model": "claude-haiku-4-5-20251001",
+        "max_turns": 1,
+        "tools": False,
+        "json": True,
+        "timeout": 150,
     },
     # The one privileged profile: full house context and tooling, for "something
     # looks wrong, go and investigate". Slow and expensive by design; not for
