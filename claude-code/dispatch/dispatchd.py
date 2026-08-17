@@ -136,6 +136,60 @@ Reply with ONLY a JSON object. No prose, no markdown fence:
 """
 
 
+LOCAL_EVENTS_PROMPT = """\
+You are a local-events scout. The input gives an area, a date range, and the
+household's interests (name — notes). Find real, scheduled, public events in
+that area and range that someone with those interests would actually enjoy.
+
+Rules:
+- Use web search. Every event needs a working URL from the venue, organizer,
+  or a ticket seller — no URL, no event. That rule exists to keep imagined
+  events out of a calendar; do not soften it.
+- Concrete dates only. If a listing is recurring ("every Friday"), report the
+  specific dates inside the range or skip it.
+- Prefer events that match a NAMED interest over generically popular ones; a
+  farmers market beats an arena show if the interests say so.
+- At most 12 events, best matches first. An empty list is a fine answer.
+- why: one short clause tying the event to a named interest.
+- confidence: "high" = official page states date and venue; "medium" =
+  aggregator listing; "low" = anything shakier.
+- Do NOT ask for clarification and do NOT reply in prose. Anything that is not
+  the object below is a parse failure that gets retried, which wastes far more
+  than a thin result would.
+
+Reply with ONLY a JSON object. No prose, no markdown fence:
+{"events":[{"title":str,"venue":str,"date":"YYYY-MM-DD","time":"HH:MM"|null,
+  "end_date":"YYYY-MM-DD"|null,"url":str,"cost":str|null,"category":str,
+  "confidence":"high"|"medium"|"low","why":str}],
+ "notes":str}
+"""
+
+INTEREST_NEWS_PROMPT = """\
+You are an interest-news scout. The input lists interests (name — notes, with a
+per-interest lookback window). Find recent, concrete happenings for them: album
+or release announcements, tour dates, exhibitions, major project news, notable
+publications.
+
+Rules:
+- Use web search. Every item needs a working URL to a primary-ish source
+  (artist site, label, venue, established outlet). No URL, no item.
+- Recent means inside that interest's lookback window; undated evergreen pages
+  do not count.
+- One item per happening — do not pad with three articles about one thing.
+- At most 10 items, best first. An empty list is a fine answer.
+- kind: "release" | "tour" | "event" | "news".
+- date: the happening's date if it has one (a show, a release day), else null.
+- Do NOT ask for clarification and do NOT reply in prose. Anything that is not
+  the object below is a parse failure that gets retried.
+
+Reply with ONLY a JSON object. No prose, no markdown fence:
+{"items":[{"title":str,"summary":str,"url":str,"date":"YYYY-MM-DD"|null,
+  "interest":str,"kind":"release"|"tour"|"event"|"news",
+  "confidence":"high"|"medium"|"low"}],
+ "notes":str}
+"""
+
+
 def _merge_activities(objs):
     """Fold bare per-activity objects back into the documented shape.
 
@@ -185,6 +239,25 @@ PROFILES = {
         "tools": False,
         "json": True,
         "timeout": 150,
+    },
+    # The interests add-on's scouts: web search only, strict JSON out. Haiku
+    # first — the `scans` table records result quality per call, so a model
+    # bump is a one-line change made on evidence, not vibes.
+    "local-events": {
+        "system": LOCAL_EVENTS_PROMPT,
+        "model": "claude-haiku-4-5-20251001",
+        "max_turns": 12,
+        "tools": ["WebSearch", "WebFetch"],
+        "json": True,
+        "timeout": 420,
+    },
+    "interest-news": {
+        "system": INTEREST_NEWS_PROMPT,
+        "model": "claude-haiku-4-5-20251001",
+        "max_turns": 12,
+        "tools": ["WebSearch", "WebFetch"],
+        "json": True,
+        "timeout": 420,
     },
     # The one privileged profile: full house context and tooling, for "something
     # looks wrong, go and investigate". Slow and expensive by design; not for
@@ -304,11 +377,18 @@ def run_profile(name, user_input):
                 # Skip user/project CLAUDE.md: a nutrition estimate has no use
                 # for the house brief, and loading it is pure token cost.
                 "--setting-sources", "", "--strict-mcp-config"]
-    if not prof["tools"]:
+    if prof["tools"] is True:
+        cmd += ["--permission-mode", "bypassPermissions"]
+    elif isinstance(prof["tools"], (list, tuple)):
+        # A named allowlist runs WITHOUT bypassPermissions: listed tools are
+        # auto-approved, everything else is explicitly denied — headless runs
+        # have nobody to answer a permission prompt, so denial must be total.
+        cmd += ["--allowed-tools", ",".join(prof["tools"]),
+                "--disallowed-tools", "Bash,Read,Write,Edit,Glob,Grep,Task,"
+                "TodoWrite,NotebookEdit"]
+    else:
         cmd += ["--disallowed-tools", "Bash,Read,Write,Edit,Glob,Grep,WebSearch,"
                 "WebFetch,Task,TodoWrite,NotebookEdit"]
-    else:
-        cmd += ["--permission-mode", "bypassPermissions"]
 
     started = time.time()
     with _slots:
