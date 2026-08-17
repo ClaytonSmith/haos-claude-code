@@ -190,6 +190,39 @@ Reply with ONLY a JSON object. No prose, no markdown fence:
 """
 
 
+MORNING_BRIEF_PROMPT = """\
+You are writing the morning brief for a household utility display — the one
+free-form slot on an otherwise mechanical dashboard. The input gives today's
+date and the household's town/region. You have web search: use it.
+
+Produce two things:
+
+1. brief: one paragraph, at most 120 words, synthesizing what actually matters
+   this morning across national/world news. Editorial judgment is the point —
+   what would a sharp friend mention over coffee? No headline lists (the
+   display already shows raw headlines), no filler like "in other news".
+2. topics: up to 4 short free-form items worth knowing today, chosen at your
+   own discretion. Good candidates: something notable happening today or this
+   week (locally or globally), an on-this-day fact worth retelling, a
+   just-announced thing people will be talking about, a seasonal/practical
+   note. Each: a short title and 1-3 sentence body. Variety across days beats
+   formula — do not produce the same four categories every time.
+
+Rules:
+- Concrete and current. Anything time-sensitive must come from a search you
+  actually ran, not memory.
+- url: include when a topic has an obvious canonical page, else null.
+- Plain text only — no markdown inside strings.
+- Do NOT ask for clarification and do NOT reply in prose. Anything that is not
+  the object below is a parse failure that gets retried.
+
+Reply with ONLY a JSON object. No prose, no markdown fence:
+{"brief":str,
+ "topics":[{"title":str,"body":str,"url":str|null}],
+ "notes":str}
+"""
+
+
 def _merge_activities(objs):
     """Fold bare per-activity objects back into the documented shape.
 
@@ -254,6 +287,17 @@ PROFILES = {
     "interest-news": {
         "system": INTEREST_NEWS_PROMPT,
         "model": "claude-haiku-4-5-20251001",
+        "max_turns": 12,
+        "tools": ["WebSearch", "WebFetch"],
+        "json": True,
+        "timeout": 420,
+    },
+    # The utility display's daily editorial slot — one call each morning,
+    # cached to disk by the caller, so quality beats cost here: Sonnet, not
+    # Haiku, because the whole job is judgment about what matters.
+    "morning-brief": {
+        "system": MORNING_BRIEF_PROMPT,
+        "model": "claude-sonnet-5",
         "max_turns": 12,
         "tools": ["WebSearch", "WebFetch"],
         "json": True,
@@ -425,7 +469,10 @@ def run_profile(name, user_input):
         "profile": name,
         # Which model actually answered, not which one we asked for — worth
         # recording alongside an estimate so a later re-run is comparable.
-        "model": next(iter(envelope.get("modelUsage") or {}), None),
+        # modelUsage also lists the CLI's internal helper model (haiku does
+        # the title/summary chores even on a sonnet run), and dict order put
+        # the helper first — report the profile's model when we pinned one.
+        "model": prof["model"] or next(iter(envelope.get("modelUsage") or {}), None),
         # NOT money. This box authenticates with a Claude **subscription**
         # (subscriptionType: max), so nothing here is billed per token; the CLI
         # reports what the same tokens would have cost at API rates. Kept because
