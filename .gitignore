@@ -10,3 +10,6 @@
 *.pem
 credentials.json
 .credentials.json
+
+# Python bytecode from the dispatch daemon, written at runtime inside the container.
+__pycache__/
