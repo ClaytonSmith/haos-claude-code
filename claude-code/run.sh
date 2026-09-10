@@ -36,6 +36,12 @@ fi
 # `bash -l` reads .bash_profile, not .bashrc — bridge the two.
 [[ -f "${HOME}/.bash_profile" ]] || echo '[[ -f ~/.bashrc ]] && . ~/.bashrc' > "${HOME}/.bash_profile"
 
+# .bashrc only reaches shells that source it. Claude Code's Bash tool snapshots
+# the PATH of the *process*, so without this the agent's own shell loses
+# ~/bin (hactl, ha-ws, house-brief) even though an SSH login has it. Export
+# here so every child — login shell, dispatch, remote-control — inherits it.
+export PATH="${HOME}/bin:${HOME}/.local/bin:${PATH}"
+
 # --- secrets -----------------------------------------------------------------
 # Runtime secrets must never be baked into the image: it is published publicly to
 # GHCR, and GitHub Actions secrets only exist on the build runner. Two runtime
