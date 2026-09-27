@@ -6,8 +6,9 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG TTYD_VERSION=1.7.7
 ARG NODE_MAJOR=22
 # Bump to update Claude Code; unpinned, two builds of one commit ship different
-# CLIs. Track the `stable` dist-tag — dispatchd runs unattended `claude -p`.
-ARG CLAUDE_CODE_VERSION=2.1.274
+# CLIs. Track `latest`, not `stable`: new models land there first, and `stable`
+# lagging is why Opus 5.5 (2.1.280) was unusable on 2.1.274.
+ARG CLAUDE_CODE_VERSION=2.1.283
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
