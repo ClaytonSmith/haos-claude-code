@@ -5,10 +5,8 @@ ARG TARGETARCH
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TTYD_VERSION=1.7.7
 ARG NODE_MAJOR=22
-# Pinned so a rebuild is reproducible: an unpinned `npm install -g` silently
-# picks up whatever is `latest` at build time, so two builds of the same commit
-# could ship different CLIs. Bump this to update Claude Code, and prefer the
-# `stable` dist-tag over `latest` — dispatchd runs unattended `claude -p`.
+# Bump to update Claude Code; unpinned, two builds of one commit ship different
+# CLIs. Track the `stable` dist-tag — dispatchd runs unattended `claude -p`.
 ARG CLAUDE_CODE_VERSION=2.1.274
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
