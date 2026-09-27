@@ -7,6 +7,15 @@ on:
       - "claude-code/**"
       - ".github/workflows/build.yml"
   workflow_dispatch:
+  # Called by bump-claude-code.yml: a push made with GITHUB_TOKEN deliberately
+  # does not trigger other workflows, so the bump has to invoke this directly.
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to build. Defaults to the triggering commit.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -30,6 +39,10 @@ jobs:
             platform: linux/arm64
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A reusable workflow resolves to the CALLER's commit, which for a
+          # bump is the commit before the pin moved. Build what we were told to.
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Resolve image name and version
         id: meta

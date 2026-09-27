@@ -1,0 +1,88 @@
+name: Bump Claude Code
+
+# The CLI is pinned in claude-code/Dockerfile, so nothing picks up a new Claude
+# Code release on its own — the add-on's auto_update tracks the ADD-ON version,
+# not the CLI inside the image. This closes that gap: check npm daily, move the
+# pin, and let build.yml publish. Supervisor's auto_update installs the result,
+# so a new release reaches the box without anyone opening a session.
+
+on:
+  schedule:
+    # 08:10 UTC — early morning in America/New_York, so the add-on restart that
+    # follows an update does not land in the middle of the day.
+    - cron: "10 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: bump-claude-code
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: check npm
+    runs-on: ubuntu-24.04
+    outputs:
+      bumped: ${{ steps.bump.outputs.bumped }}
+      sha: ${{ steps.bump.outputs.sha }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Move the pin if npm has something newer
+        id: bump
+        run: |
+          set -euo pipefail
+
+          # `latest`, not `stable`: new models land in latest first, and a
+          # lagging stable is what made Opus 5.5 unusable on 2.1.274.
+          latest="$(npm view @anthropic-ai/claude-code version)"
+          current="$(grep -oP '^ARG CLAUDE_CODE_VERSION=\K.+' claude-code/Dockerfile)"
+          echo "pinned ${current} | npm latest ${latest}"
+
+          if [[ -z "${latest}" || -z "${current}" ]]; then
+            echo "::error::could not read the pinned or published version"
+            exit 1
+          fi
+
+          if [[ "${latest}" == "${current}" ]]; then
+            echo "already current"
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Supervisor pins an add-on's manifest to the INSTALLED version and
+          # only re-reads config.yaml when that version changes, so the add-on
+          # version has to move too or the new image is built and never pulled.
+          addon="$(grep -oP '^version:\s*"\K[^"]+' claude-code/config.yaml)"
+          next="$(awk -F. -v OFS=. '{ $NF = $NF + 1; print }' <<<"${addon}")"
+
+          sed -i "s|^ARG CLAUDE_CODE_VERSION=.*|ARG CLAUDE_CODE_VERSION=${latest}|" claude-code/Dockerfile
+          sed -i "0,/^version:/s|^version:.*|version: \"${next}\"|" claude-code/config.yaml
+
+          # Fail loudly rather than pushing a no-op commit if either sed missed.
+          grep -qx "ARG CLAUDE_CODE_VERSION=${latest}" claude-code/Dockerfile
+          grep -qx "version: \"${next}\"" claude-code/config.yaml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add claude-code/Dockerfile claude-code/config.yaml
+          git commit -m "chore(claude-code): Claude Code ${latest}, add-on ${next}" \
+                     -m "Pin moved automatically by .github/workflows/bump-claude-code.yml."
+          git push origin HEAD:main
+
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
+          echo "version=${latest}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: publish ${{ needs.bump.outputs.version }}
+    needs: bump
+    if: needs.bump.outputs.bumped == 'true'
+    # Build the commit the bump just made, not the one that triggered this run.
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.bump.outputs.sha }}
