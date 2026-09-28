@@ -38,7 +38,7 @@ Drive Supervisor over its **WebSocket** `supervisor/api` route:
 Do **not** reach for the `/api/hassio/...` REST proxy. It returns 401 on every
 path in HA 2026.7 regardless of token, and a 401 there has an *empty body*, so a
 `curl … | jq -e '.result == "ok"'` health check passes while every write
-silently does nothing. That failure mode cost a full session before it was found.
+silently does nothing.
 
 Two more things that are easy to get wrong: `/store/apps` does not exist —
 the 2026.07 addons → apps rename hit the `ha` CLI and the `map:` type, not the
@@ -113,12 +113,13 @@ update visible in Home Assistant**. Push to `main` with a changed version and th
 add-on shows an update once the build finishes.
 
 > **If you are Claude, running inside this container, read this twice.**
-> Applying that update replaces the container you are executing in. Sessions do
-> not survive it — the work stops mid-thought, with no chance to save state or
-> report back. Editing this repo is editing your own floor.
+> Applying that update replaces the container you are executing in. Running
+> commands are killed and the turn in flight is lost, with no chance to save
+> state or report back. Editing this repo is editing your own floor.
 >
 > `/data/home` and `/data/workspace` persist, so credentials and checkouts come
-> back; the *session* does not. Two consequences worth internalising:
+> back, and a Remote Control session resumes once the container is up again.
+> Two consequences worth internalising:
 >
 > - Batch changes to this image. Land one version bump, not five.
 > - For anything non-trivial, build it as its **own** add-on under `/local_apps`

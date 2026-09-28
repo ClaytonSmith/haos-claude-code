@@ -1,117 +1,88 @@
 # house-dispatch
 
-Lets the rest of the house hand work to a real Claude Code session over HTTP.
+Lets house services hand work to a Claude Code session over HTTP.
 
     POST http://1dedd3a9-claude-code:8097/dispatch
     Authorization: Bearer <token from ~/.config/haos/dispatch.env>
     {"profile": "nutrition", "input": "chicken burrito bowl with guac"}
 
-It runs here, in the `claude-code` add-on, because this is where the `claude`
-binary and its OAuth credentials live. **No Anthropic API key is involved** — it
-reuses the subscription credentials already in `$CLAUDE_CONFIG_DIR`.
+It runs in the `claude-code` add-on because the `claude` binary and its
+credentials live there. It uses the subscription login in `$CLAUDE_CONFIG_DIR`;
+no API key is involved.
 
-## Callers send a profile name, never a prompt
+## Profiles
 
-This is the whole security model, and it is not negotiable.
+Callers send a profile name and input, never a prompt. Each profile fixes the
+system prompt, model, tools and turn limit on the server.
 
-The process runs `claude` **as root with the house's credentials**. An endpoint
-accepting arbitrary prompts and tool lists would be remote code execution, on a
-flat LAN with no internal segmentation. So profiles are defined server-side —
-system prompt, model, tool allowlist and turn limit all fixed — and a caller can
-only pick one by name and supply input. A caller cannot widen its own privileges.
+| Profile | Model | Tools | Turns | For |
+|---|---|---|---|---|
+| `nutrition` | Haiku 4.5 | none | 1 | meal → itemised calories and macros |
+| `exercise` | Haiku 4.5 | none | 1 | workout → activities with Compendium MET values |
+| `logentry` | Haiku 4.5 | none | 1 | free text → food and exercise sections in one reply |
+| `morning-brief` | Sonnet 5 | WebSearch, WebFetch | 12 | the display's morning brief |
+| `local-events` | Haiku 4.5 | WebSearch, WebFetch | 12 | local events for the interests feed |
+| `interest-news` | Haiku 4.5 | WebSearch, WebFetch | 12 | news for a batch of interests |
+| `house-task` | session default | all | 30 | open-ended investigation |
 
-It also binds **inside the container only**: `config.yaml` deliberately maps no
-host port for 8097. Siblings reach it on the add-on network; the LAN cannot reach
-it at all. If you ever add a `ports:` mapping for it, you have turned it into an
-RCE surface — don't.
+- A profile with a tool list gets exactly those tools; everything else is
+  denied.
+- `house-task` has full tooling and bypasses permission prompts. Keep it off
+  any automatic path.
+- Responses report the profile's pinned model and `api_equiv_usd`.
 
-| Profile | Model | Tools | For |
-|---|---|---|---|
-| `nutrition` | Haiku 4.5 | none | meal description → itemised calories and macros |
-| `exercise` | Haiku 4.5 | none | workout description → activities with Compendium MET values |
-| `house-task` | session default | all | "something looks wrong, go and investigate" |
+## Security
 
-`house-task` is the one privileged profile: full house context, full tooling,
-`bypassPermissions`, 30 turns. Slow and expensive by design. Never put it on a
-hot path.
+- The process runs `claude` as root with the house's credentials. Accepting
+  prompts or tool lists from callers would be remote code execution.
+- `config.yaml` maps no host port for 8097. Siblings reach it over the add-on
+  network; the LAN cannot. Do not add a `ports:` mapping for it.
+- The token reaches callers as an add-on option. Supervisor echoes options in
+  validation errors, so it can land in logs. Rotate it with
+  `python3 /opt/dispatch/dispatchd.py --rotate-token`, then update every
+  caller.
 
-## What it consumes
+## Cost
 
-**It does not cost money per call.** This box authenticates with a Claude
-**subscription** — `~/.claude/.credentials.json` shows `subscriptionType: max`,
-`rateLimitTier: default_claude_max_5x`, and there is no `ANTHROPIC_API_KEY`. The
-`total_cost_usd` field in the `claude -p` envelope is what the same tokens *would
-have* cost at API rates; nothing is billed. The add-on option
-`anthropic_api_key` is the only thing that switches this box to API billing, and
-it is unset. Our response field is named `api_equiv_usd` to stop anyone reading
-it as a bill.
+- Nothing is billed per call. `api_equiv_usd` is what the tokens would cost at
+  API rates; the `anthropic_api_key` add-on option is the only switch to API
+  billing.
+- Calls spend the subscription quota that interactive sessions use.
+- Each call is a cold process: about 15–30 s and 18k tokens whatever the
+  question, with no cache reuse. `--setting-sources ''` and
+  `--disallowed-tools` do not reduce it.
+- Concurrency is capped at 2.
 
-**The real budget is subscription quota**, and the thing to understand is that
-house-dispatch draws from **the same pool as Clayton's own interactive
-sessions**. A chatty automation does not produce an invoice; it eats headroom
-from the person trying to work, and can push the account into a rate limit.
+Callers must therefore:
 
-That makes the measured overhead matter as much as it would have if it were
-money. Measured 2026-08-13 across several runs:
-
-- Each `claude -p` is a **cold process**. ~11–18k tokens of tool schemas and
-  system prompt are rebuilt every invocation, and `cache_read` is **always 0**.
-- So ~**15–30 s** and ~18k tokens of quota to answer a 20-token question.
-- Slimming it down made it **worse**. `--setting-sources ''` drops CLAUDE.md but
-  also drops what little cache reuse existed; `--disallowed-tools` does not
-  remove tool definitions from the prompt. Both were tried.
-
-The overhead is structural, not a tuning problem. Design around it:
-
-- **Callers should be async.** The `health` add-on stores the raw text and
-  returns immediately, resolving afterwards — nothing waits on a dispatch.
-- **Cache on the caller's side.** Repeat inputs should never reach here. This is
-  quota preservation, not penny-pinching.
-- **Rate limits are an expected failure mode**, not an exception. A caller must
-  tolerate a dispatch failing and retry later; `health` leaves the entry
-  `pending` and the raw text intact.
-- Concurrency is capped at 2. This box has 4 cores and is also running the house.
-
-If quota contention ever becomes the problem, putting a key in
-`~/.config/haos/anthropic.env` and adding an API-backed path behind the same
-profile interface would **decouple the house's automated calls from the human's
-subscription** — that isolation is the argument for it, not price. The profile
-boundary means no caller changes.
+- run asynchronously, never blocking a user on a dispatch;
+- cache repeated inputs on their side;
+- treat a rate limit as a normal outcome and back off, because a failed
+  dispatch has already spent its quota.
 
 ## Operating it
 
 ```bash
-curl -s http://localhost:8097/health                  # profiles + free slots
-tail -f /data/dispatch.log                            # it logs one line per call
-python3 /opt/dispatch/dispatchd.py --rotate-token     # then update every caller
-./restart-dev.sh                                      # iterate without a rebuild
+curl -s http://localhost:8097/health     # profiles and free slots
+tail -f /data/dispatch.log               # one line per call
+./restart-dev.sh                         # run the workspace copy instead of the baked one
 ```
 
-Set `dispatch_enabled: false` in the add-on options to turn it off.
+- The add-on starts the copy baked into the image at `/opt/dispatch` when
+  `dispatch_enabled` is true. A changed or new profile goes live with an image
+  release.
+- `restart-dev.sh` replaces the running daemon with the workspace copy until
+  the container restarts.
+- Never `pkill -f dispatchd.py`; the calling shell matches too.
+  `restart-dev.sh` uses a pidfile.
+- `claude-code/.dockerignore` denies everything by default. A new `COPY` in the
+  Dockerfile needs its own `!` line.
 
-**Never `pkill -f dispatchd.py`.** The calling shell's own command line contains
-that string, so pkill kills the shell you typed it in. `restart-dev.sh` uses a
-pidfile for exactly this reason.
+## Implementation notes
 
-Rotating the token is a first-class operation because it reaches callers as an
-add-on *option*, and Supervisor echoes the whole options object back in
-validation errors — so it lands in logs and transcripts more easily than you
-would like. After rotating, every caller must be updated by hand.
-
-## Gotchas already paid for
-
-**Strip the session environment.** `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID` and
-friends mark the parent as an agent session in progress; inherited, the child
-believes it is a continuation of its parent. `child_env()` removes them.
-
-**Parse generously.** The prompts say "no markdown fence" and the model fences
-the reply about half the time anyway. It also sometimes emits several
-concatenated top-level objects instead of one containing a list — which is how
-the first `exercise` prompt broke, because it asked for a single activity and
-"ran 5 miles, then lifted" is obviously two. `extract_json()` returns a list, and
-a profile may supply a `merge` function.
-
-**Ask for the right thing.** `exercise` deliberately does *not* ask for calories.
-It returns a MET value and duration; the caller computes energy. That is
-reproducible, auditable, and self-corrects as body weight changes — where a
-model-supplied calorie figure is unfalsifiable.
+- `child_env()` strips `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID` and related
+  variables, or the child believes it continues the parent session.
+- `extract_json()` tolerates fenced replies and several concatenated objects,
+  and returns a list. A profile may supply a `merge` function.
+- `exercise` asks for MET and duration, never calories; the caller computes
+  energy.

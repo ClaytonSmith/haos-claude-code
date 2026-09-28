@@ -101,8 +101,9 @@ Note this is Supervisor's own listener on the add-on network, **not** the
 `/api/hassio/...` proxy on the Core port — that one is 401-blocked in HA 2026.7
 no matter what token you present.
 
-> Updating this add-on replaces the container you are running in, ending the
-> session with no warning. For anything substantial, build a separate add-on
+> Updating this add-on replaces the container you are running in: running
+> commands are killed and the turn in flight is lost, though a Remote Control
+> session resumes afterwards. For anything substantial, build a separate add-on
 > instead of modifying this image.
 
 ### 2. `/app_config/.env` — for everything else
@@ -160,11 +161,8 @@ container holds `hassio_role: manager`, so think hard before adding
 `--permission-mode bypassPermissions` here — that combination is an unattended
 agent with host reboot rights.
 
-## First run
-
 Sign-in is interactive and cannot be scripted, so run `claude` once from the
-sidebar terminal before relying on autostart. Credentials persist in
-`/data/home/.claude`, so this is a one-time step that survives updates.
+sidebar terminal before relying on autostart.
 
 ## Paths
 
