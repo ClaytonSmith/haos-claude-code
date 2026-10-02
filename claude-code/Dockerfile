@@ -8,7 +8,7 @@ ARG NODE_MAJOR=22
 # Bump to update Claude Code; unpinned, two builds of one commit ship different
 # CLIs. Track `latest`, not `stable`: new models land there first, and `stable`
 # lagging is why Opus 5.5 (2.1.280) was unusable on 2.1.274.
-ARG CLAUDE_CODE_VERSION=2.1.286
+ARG CLAUDE_CODE_VERSION=2.1.287
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
