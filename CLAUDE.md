@@ -30,6 +30,7 @@ decision records. When something changes, rewrite the doc; never append to it.
 | Kind of fact | Its one home |
 |---|---|
 | How a service works, and its constraints | `README.md` in its checkout; read it before changing the service |
+| What a service must do (its requirements) | the Requirements tracker: `reqctl show <service>` before changing it, `reqctl set <KEY> status=implemented` after |
 | How to use a tool | the tool's `--help` |
 | Live state | `house-brief` |
 | Preferences and cross-cutting traps | memory, indexed in `~/.claude/projects/-data-workspace-haos-claude-code/memory/MEMORY.md` |
