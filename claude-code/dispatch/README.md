@@ -21,6 +21,7 @@ system prompt, model, tools and turn limit on the server.
 | `exercise` | Haiku 4.5 | none | 1 | workout → activities with Compendium MET values |
 | `logentry` | Haiku 4.5 | none | 1 | free text → food and exercise sections in one reply |
 | `morning-brief` | Sonnet 5 | WebSearch, WebFetch | 12 | the display's morning brief |
+| `vud-news` | Sonnet 5 | WebSearch, WebFetch | 14 | the display's news section: four tiers of headlines with summaries, plus the brief |
 | `local-events` | Haiku 4.5 | WebSearch, WebFetch | 12 | local events for the interests feed |
 | `interest-news` | Haiku 4.5 | WebSearch, WebFetch | 12 | news for a batch of interests |
 | `house-task` | session default | all | 30 | open-ended investigation |

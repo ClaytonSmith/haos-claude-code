@@ -223,6 +223,56 @@ Reply with ONLY a JSON object. No prose, no markdown fence:
 """
 
 
+VUD_NEWS_PROMPT = """\
+You compile the news section of a household's morning display: a TV board
+read from across a room, where every item is a headline a person can select
+to read a one-sentence summary. The input gives today's date, the home town,
+its neighbouring towns, the region, and the headlines on the wires this
+morning for orientation. You have web search: use it, especially for the
+local tier, which the wires do not carry.
+
+Produce:
+
+1. brief: one paragraph, at most 100 words, on what actually matters this
+   morning across world and national news. Editorial judgment is the point:
+   what would a sharp friend mention over coffee? No headline lists, no
+   filler.
+2. tiers: four lists of headlines, best first, each with a one-sentence
+   summary that carries the fact:
+   - global: the world outside the country, 3 to 4 items.
+   - national: the country, 3 to 4 items.
+   - regional: the region named in the input (state and metro), 2 to 4 items.
+   - local: the home town and its neighbouring towns, 0 to 4 items: town
+     decisions, schools, road work, businesses opening or closing, events
+     this week, weather impacts. Search the town names directly, including
+     local outlets and the towns' own sites. An empty list is a fine answer;
+     an invented item is not.
+   A quiet day gets short lists. Never pad a tier.
+3. topics: up to 2 short items worth knowing today that are not news: an
+   on-this-day fact, a seasonal or practical note. Optional.
+
+Rules:
+- Concrete and current. Anything time-sensitive must come from a search you
+  actually ran or from the headlines in the input, never from memory.
+- title: the headline, carrying the fact itself, at most 110 characters. No
+  clickbait ("what to know", "here's why"), no questions.
+- summary: one sentence, at most 220 characters, that adds to the title.
+- source: the outlet's name. url: the article's page when you have it, else
+  null.
+- One item per story; never three outlets' versions of one event.
+- Plain text only, no markdown inside strings.
+- Do NOT ask for clarification and do NOT reply in prose. Anything that is
+  not the object below is a parse failure that gets retried.
+
+Reply with ONLY a JSON object. No prose, no markdown fence:
+{"brief":str,
+ "tiers":{"global":[{"title":str,"summary":str,"source":str,"url":str|null}],
+          "national":[...],"regional":[...],"local":[...]},
+ "topics":[{"title":str,"body":str}],
+ "notes":str}
+"""
+
+
 def _merge_activities(objs):
     """Fold bare per-activity objects back into the documented shape.
 
@@ -303,6 +353,18 @@ PROFILES = {
         "json": True,
         "timeout": 420,
     },
+    # The utility display's news section: four tiers of headlines with
+    # summaries plus the brief, one call each morning, validated and cached to
+    # disk by the caller. Sonnet for the same reason as the brief it replaces:
+    # the job is judgment about what matters, and the local tier is a search.
+    "vud-news": {
+        "system": VUD_NEWS_PROMPT,
+        "model": "claude-sonnet-5",
+        "max_turns": 14,
+        "tools": ["WebSearch", "WebFetch"],
+        "json": True,
+        "timeout": 420,
+    },
     # The one privileged profile: full house context and tooling, for "something
     # looks wrong, go and investigate". Slow and expensive by design; not for
     # anything on a hot path.
@@ -374,6 +436,30 @@ def child_env():
 
 
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.S)
+# A backslash before anything JSON does not allow ("\-", "\$", "\'"): the
+# commonest way a model breaks an otherwise valid reply.
+_BAD_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
+def _decode_all(text, start):
+    """Every JSON object from `start` on. Raises on the first if it is bad;
+    stops quietly at trailing prose after at least one object."""
+    # strict=False: a raw newline inside a string is the other common break,
+    # and rejecting it costs a whole retry.
+    decoder = json.JSONDecoder(strict=False)
+    out, idx = [], start
+    while idx < len(text):
+        try:
+            obj, end = decoder.raw_decode(text, idx)
+        except json.JSONDecodeError:
+            if not out:
+                raise
+            break
+        out.append(obj)
+        idx = end
+        while idx < len(text) and text[idx] in " \t\r\n,":
+            idx += 1
+    return out
 
 
 def extract_json(text):
@@ -383,7 +469,9 @@ def extract_json(text):
     fence" and the model fences it anyway about half the time. And it sometimes
     emits several concatenated objects rather than one object containing a list
     — which is why the caller gets a list and decides what that means. Retrying
-    costs ~15s and ~$0.04, so parsing generously is worth the code.
+    costs ~15s and ~$0.04, so parsing generously is worth the code: invalid
+    escapes are repaired, and a reply that still fails is logged with the
+    position and context of the error, so the next failure is diagnosable.
     """
     if not text:
         return []
@@ -394,18 +482,19 @@ def extract_json(text):
     start = text.find("{")
     if start < 0:
         return []
-    decoder = json.JSONDecoder()
-    out, idx = [], start
-    while idx < len(text):
-        try:
-            obj, end = decoder.raw_decode(text, idx)
-        except json.JSONDecodeError:
-            break
-        out.append(obj)
-        idx = end
-        while idx < len(text) and text[idx] in " \t\r\n,":
-            idx += 1
-    return out
+    try:
+        return _decode_all(text, start)
+    except json.JSONDecodeError:
+        pass
+    repaired = _BAD_ESCAPE.sub(r"\\\\", text)
+    try:
+        objs = _decode_all(repaired, start)
+        log("repaired invalid escapes in the reply")
+        return objs
+    except json.JSONDecodeError as err:
+        lo, hi = max(0, err.pos - 120), err.pos + 120
+        log(f"json error at {err.pos}: {err.msg}: {text[lo:hi]!r}")
+        return []
 
 
 def run_profile(name, user_input):
@@ -485,7 +574,7 @@ def run_profile(name, user_input):
     if prof["json"]:
         objs = extract_json(text)
         if not objs:
-            log(f"{name}: reply was not JSON: {text[:200]}")
+            log(f"{name}: reply was not JSON: {text[:200]} ... {text[-200:]}")
             return {"ok": False, "error": "model did not return JSON", "raw": text[:2000]}
         if len(objs) > 1:
             merge = prof.get("merge")
