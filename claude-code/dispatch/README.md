@@ -24,12 +24,24 @@ system prompt, model, tools and turn limit on the server.
 | `vud-news` | Sonnet 5 | WebSearch, WebFetch | 14 | the display's news section: four tiers of headlines with summaries, plus the brief |
 | `local-events` | Haiku 4.5 | WebSearch, WebFetch | 12 | local events for the interests feed |
 | `interest-news` | Haiku 4.5 | WebSearch, WebFetch | 12 | news for a batch of interests |
+| `zigbee-responder` | Sonnet 5 | none | 1 | first look at a dead Zigbee bridge: decides whether a restart is the cure |
 | `house-task` | session default | all | 30 | open-ended investigation |
 
 - A profile with a tool list gets exactly those tools; everything else is
   denied.
 - `house-task` has full tooling and bypasses permission prompts. Keep it off
   any automatic path.
+- A profile that has to act carries `observe` and `acts`, and the model still
+  gets no tools. `run_responder` runs the `observe` command and hands the model
+  its output; if the reply's `act` names an entry in `acts`, the dispatcher
+  runs that command once, observes again and asks for the final report.
+  `resolved` in the response is the last observation's exit status, not the
+  model's opinion. `zigbee-responder` is the one such profile: it observes with
+  `zigbee-doctor status` and may ask for `zigbee-doctor restart`.
+- Do not give a profile a shell through an allow rule such as
+  `Bash(some-command)`. The rule does not confine it: the CLI runs commands it
+  judges read-only (`id`, `cat`) without asking, so the profile could read any
+  file the process can.
 - Responses report the profile's pinned model and `api_equiv_usd`.
 
 ## Security
@@ -38,7 +50,8 @@ system prompt, model, tools and turn limit on the server.
   prompts or tool lists from callers would be remote code execution.
 - `config.yaml` maps no host port for 8097. Siblings reach it over the add-on
   network; the LAN cannot. Do not add a `ports:` mapping for it.
-- The token reaches callers as an add-on option. Supervisor echoes options in
+- The token reaches callers as an add-on option, and Home Assistant holds it
+  in `secrets.yaml` for the profile its automation calls. Supervisor echoes options in
   validation errors, so it can land in logs. Rotate it with
   `python3 /opt/dispatch/dispatchd.py --rotate-token`, then update every
   caller.
