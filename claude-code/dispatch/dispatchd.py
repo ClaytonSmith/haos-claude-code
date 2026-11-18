@@ -595,9 +595,17 @@ def run_profile(name, user_input):
             return {"ok": False, "error": f"timeout after {prof['timeout']}s"}
 
     if proc.returncode != 0:
-        log(f"{name}: exit {proc.returncode}: {proc.stderr[:300]}")
+        # The CLI reports most failures (a lapsed login, an API error, a usage
+        # limit) in the JSON envelope on stdout and leaves stderr empty.
+        why = proc.stderr.strip()
+        if not why:
+            try:
+                why = str(json.loads(proc.stdout).get("result") or "")
+            except (ValueError, AttributeError):
+                why = proc.stdout.strip()
+        log(f"{name}: exit {proc.returncode}: {why[:300]}")
         return {"ok": False, "error": f"claude exited {proc.returncode}",
-                "stderr": proc.stderr[-2000:]}
+                "detail": why[:500], "stderr": proc.stderr[-2000:]}
 
     try:
         envelope = json.loads(proc.stdout)
@@ -648,6 +656,9 @@ def run_profile(name, user_input):
     return out
 
 
+RESPONDER_RETRY_SECONDS = 20
+
+
 def _run_tool(argv):
     """Run one of a profile's fixed commands. Returns (exit code, output)."""
     try:
@@ -672,6 +683,12 @@ def run_responder(name, user_input):
     tool = " ".join(prof["observe"])
     evidence = f"{user_input}\n\n--- {tool} (exit {code}) ---\n{seen}"
     out = run_profile(name, evidence)
+    if not out.get("ok"):
+        # One more try. A responder that gives up on a single failed call
+        # pages the owner for something a second call would have fixed.
+        log(f"{name}: first call failed ({out.get('error')}); trying once more")
+        time.sleep(RESPONDER_RETRY_SECONDS)
+        out = run_profile(name, evidence)
     if not out.get("ok"):
         out.update(resolved=code == 0, acted=None)
         return out

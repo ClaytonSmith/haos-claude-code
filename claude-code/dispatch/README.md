@@ -42,7 +42,9 @@ system prompt, model, tools and turn limit on the server.
   `Bash(some-command)`. The rule does not confine it: the CLI runs commands it
   judges read-only (`id`, `cat`) without asking, so the profile could read any
   file the process can.
-- Responses report the profile's pinned model and `api_equiv_usd`.
+- Responses report the profile's pinned model and `api_equiv_usd`. A failed run
+  carries `detail`: the reason the CLI gave, which it prints on stdout, not
+  stderr. `run_responder` tries its first call twice, 20 seconds apart.
 
 ## Security
 
